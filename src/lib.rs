@@ -2,12 +2,6 @@ use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use std::thread;
 use std::time::{Duration, SystemTime};
 
-/// Formats the sum of two numbers as string.
-#[pyfunction]
-fn sum_as_string(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
-
 #[pyclass(subclass)]
 pub struct MonotonicClock {
     pub _timeAtLastReset: f64,
@@ -90,10 +84,11 @@ impl Clock {
 }
 
 #[pyfunction]
-pub fn sleepers(t: f64, microsleep_dur: u64) -> PyResult<()> {
+pub fn sleepers(t: f64) -> PyResult<()> {
     let start = SystemTime::now();
-    let microsleep_dur = Duration::from_micros(microsleep_dur);
+    let microsleep_dur = Duration::from_micros(1);
     let sleep_dur = Duration::from_secs_f64(t);
+    thread::sleep(sleep_dur - microsleep_dur * 200);
     loop {
         thread::sleep(microsleep_dur);
         match SystemTime::now().duration_since(start) {
