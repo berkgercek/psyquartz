@@ -88,7 +88,9 @@ pub fn sleepers(t: f64) -> PyResult<()> {
     let start = SystemTime::now();
     let microsleep_dur = Duration::from_micros(1);
     let sleep_dur = Duration::from_secs_f64(t);
-    thread::sleep(sleep_dur - microsleep_dur * 200);
+    if (microsleep_dur * 200) < sleep_dur {
+        thread::sleep(sleep_dur - microsleep_dur * 200)
+    }
     loop {
         thread::sleep(microsleep_dur);
         match SystemTime::now().duration_since(start) {
