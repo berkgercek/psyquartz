@@ -106,7 +106,7 @@ pub fn sleepers(t: f64) -> PyResult<()> {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn clockers(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn psyquartz(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sleepers, m)?);
     m.add_class::<MonotonicClock>()?;
     m.add_class::<Clock>()?;
