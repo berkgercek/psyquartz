@@ -110,7 +110,7 @@ pub fn sleep(t: f64) -> PyResult<()> {
 }
 
 /// A Python module implemented in Rust.
-#[pymodule]
+#[pymodule(gil_used = false)]
 fn psyquartz(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sleepers, m)?);
     m.add_function(wrap_pyfunction!(sleep, m)?);
