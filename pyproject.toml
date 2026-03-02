@@ -11,5 +11,12 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dynamic = ["version"]
+
 [tool.maturin]
 features = ["pyo3/extension-module"]
+
+
+[tool.uv]
+cache-keys = [{file = "**/*.rs"}, {file = "Cargo.toml"}, {file = "pyproject.toml"}]
+default-groups = 'all'
+

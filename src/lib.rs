@@ -86,7 +86,7 @@ impl Clock {
 #[pyfunction]
 pub fn sleepers(t: f64) -> PyResult<()> {
     let start = SystemTime::now();
-    let microsleep_dur = Duration::from_micros(1);
+    let microsleep_dur = Duration::from_nanos(500);
     let sleep_dur = Duration::from_secs_f64(t);
     if (microsleep_dur * 200) < sleep_dur {
         thread::sleep(sleep_dur - microsleep_dur * 200)
@@ -104,10 +104,16 @@ pub fn sleepers(t: f64) -> PyResult<()> {
     }
 }
 
+#[pyfunction]
+pub fn sleep(t: f64) -> PyResult<()> {
+    sleepers(t)
+}
+
 /// A Python module implemented in Rust.
 #[pymodule]
 fn psyquartz(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sleepers, m)?);
+    m.add_function(wrap_pyfunction!(sleep, m)?);
     m.add_class::<MonotonicClock>()?;
     m.add_class::<Clock>()?;
     Ok(())
