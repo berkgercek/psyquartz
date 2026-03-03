@@ -5,21 +5,68 @@
 #
 name: CI
 
-on:
-  push:
-    branches:
-      - main
-      - master
-    tags:
-      - '*'
+on:  # yamllint disable-line rule:truthy
   pull_request:
+  push:
+    branches: [main]
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
 
 jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    outputs:
+      is-semver-tag: ${{ steps.check.outputs.is-semver-tag }}
+      is-test-release: ${{ steps.check.outputs.is-test-release }}
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'release'
+      - name: Check version matches
+        id: check
+        if: github.event_name == 'release'
+        run: |
+          RELEASE_NAME="${{ github.event.release.name }}"
+          TAG_NAME="${{ github.event.release.tag_name }}"
+
+          # Extract semver (X.Y.Z) from release name by stripping leading text
+          RELEASE_VERSION=$(echo "$RELEASE_NAME" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+          CARGO_VERSION=$(grep '^version' Cargo.toml | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+
+          echo "Release name: $RELEASE_NAME"
+          echo "Extracted version: $RELEASE_VERSION"
+          echo "Cargo.toml version: $CARGO_VERSION"
+          echo "Tag name: $TAG_NAME"
+
+          if [ -z "$RELEASE_VERSION" ]; then
+            echo "::error::Could not extract semver from release name: $RELEASE_NAME"
+            exit 1
+          fi
+
+          if [ "$RELEASE_VERSION" != "$CARGO_VERSION" ]; then
+            echo "::error::Version mismatch! Release: $RELEASE_VERSION, Cargo.toml: $CARGO_VERSION"
+            exit 1
+          fi
+
+          # Check if tag is pure semver (X.Y.Z with no leading/trailing characters)
+          if echo "$TAG_NAME" | grep -qxE '[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "is-semver-tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-semver-tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Check if release name starts with test-
+          if echo "$RELEASE_NAME" | grep -qE '^test-'; then
+            echo "is-test-release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-test-release=false" >> "$GITHUB_OUTPUT"
+          fi
+
   linux:
+    needs: [check-version]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -44,7 +91,7 @@ jobs:
           args: --release --out dist
           sccache: 'true'
           manylinux: auto
-      - name: Build free-threaded wheels
+      - name: Build no-gil wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
@@ -58,6 +105,7 @@ jobs:
           path: dist
 
   musllinux:
+    needs: [check-version]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -89,6 +137,7 @@ jobs:
           path: dist
 
   windows:
+    needs: [check-version]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -109,7 +158,29 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist
           sccache: 'true'
-      - name: Build free-threaded wheels
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-windows-${{ matrix.platform.target }}
+          path: dist
+
+  windows-no-GIL:
+    needs: [check-version]
+    runs-on: ${{ matrix.platform.runner }}
+    strategy:
+      matrix:
+        platform:
+          - runner: windows-latest
+            target: x64
+          - runner: windows-latest
+            target: x86
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.14t
+          architecture: ${{ matrix.platform.target }}
+      - name: Build no-GIL wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
@@ -123,6 +194,7 @@ jobs:
           path: dist
 
   macos:
+    needs: [check-version]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -140,7 +212,7 @@ jobs:
           target: ${{ matrix.platform.target }}
           args: --release --out dist
           sccache: 'true'
-      - name: Build free-threaded wheels
+      - name: Build no-gil wheels
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.platform.target }}
@@ -154,6 +226,7 @@ jobs:
           path: dist
 
   sdist:
+    needs: [check-version]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -171,14 +244,55 @@ jobs:
   release:
     name: Release
     runs-on: ubuntu-latest
-    if: "startsWith(github.ref, 'refs/tags/')"
-    needs: [linux, musllinux, windows, macos, sdist]
+    environment: pypi
+    permissions:
+      id-token: write
+    if: needs.check-version.outputs.is-semver-tag == 'true'
+    needs: [check-version, linux, musllinux, windows, macos, sdist]
     steps:
       - uses: actions/download-artifact@v4
+      - name: Get PyPI OIDC token
+        id: mint-pypi-token
+        run: |
+          resp=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=pypi")
+          oidc_token=$(jq '.value' <<< "${resp}")
+          resp=$(curl -X POST https://pypi.org/_/oidc/mint-token -d "{\"token\": \"${oidc_token}\"}")
+            api_token=$(jq -r '.token' <<< "${resp}")
+          echo "::add-mask::${api_token}"
+          echo "api-token=${api_token}" >> "${GITHUB_OUTPUT}"
       - name: Publish to PyPI
         uses: PyO3/maturin-action@v1
         env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+          MATURIN_PYPI_TOKEN: ${{ steps.mint-pypi-token.outputs.api-token }}
         with:
           command: upload
           args: --non-interactive --skip-existing wheels-*/*
+
+  test-release:
+    name: Test Release
+    runs-on: ubuntu-latest
+    environment: test-pypi
+    permissions:
+      id-token: write
+    if: needs.check-version.outputs.is-test-release == 'true'
+    needs: [check-version, linux, musllinux, windows, macos, sdist]
+    steps:
+      - uses: actions/download-artifact@v4
+      - name: Get testPyPI OIDC token
+        id: mint-testpypi-token
+        run: |
+          resp=$(curl -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=testpypi")
+          oidc_token=$(jq '.value' <<< "${resp}")
+          resp=$(curl -X POST https://pypi.org/_/oidc/mint-token -d "{\"token\": \"${oidc_token}\"}")
+            api_token=$(jq -r '.token' <<< "${resp}")
+          echo "::add-mask::${api_token}"
+          echo "api-token=${api_token}" >> "${GITHUB_OUTPUT}"
+      - name: Publish to Test PyPI
+        uses: PyO3/maturin-action@v1
+        env:
+          MATURIN_PYPI_TOKEN: ${{ steps.mint-testpypi-token.outputs.api-token }}
+        with:
+          command: upload
+          args: --non-interactive --skip-existing --repository-url https://test.pypi.org/legacy/ wheels-*/*
