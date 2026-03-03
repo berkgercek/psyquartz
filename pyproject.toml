@@ -20,3 +20,8 @@ features = ["pyo3/extension-module"]
 cache-keys = [{file = "**/*.rs"}, {file = "Cargo.toml"}, {file = "pyproject.toml"}]
 default-groups = 'all'
 
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+publish-url = "https://test.pypi.org/legacy/"
+explicit = true
