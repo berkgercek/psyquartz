@@ -251,9 +251,13 @@ jobs:
     needs: [check-version, linux, musllinux, windows, macos, sdist]
     steps:
       - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: dist/
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
       - run: uv publish
+
   test-release:
     name: Test Release
     runs-on: ubuntu-latest
@@ -265,6 +269,9 @@ jobs:
     needs: [check-version, linux, musllinux, windows, macos, sdist]
     steps:
       - uses: actions/download-artifact@v8
+        with:
+          merge-multiple: true
+          path: dist/
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
       - run: uv publish --index testpypi
