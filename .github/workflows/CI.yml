@@ -248,7 +248,7 @@ jobs:
     permissions:
       id-token: write
     if: needs.check-version.outputs.is-semver-tag == 'true'
-    needs: [check-version, linux, musllinux, windows, macos, sdist]
+    needs: [check-version, linux, musllinux, windows, windows-no-GIL, macos, sdist]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -267,7 +267,7 @@ jobs:
       contents: read
       id-token: write
     if: needs.check-version.outputs.is-test-release == 'true'
-    needs: [check-version, linux, musllinux, windows, macos, sdist]
+    needs: [check-version, linux, musllinux, windows, windows-no-GIL, macos, sdist]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
