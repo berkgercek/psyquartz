@@ -1,6 +1,6 @@
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 #[pyclass(subclass)]
 pub struct MonotonicClock {
@@ -85,21 +85,25 @@ impl Clock {
 
 #[pyfunction]
 pub fn sleepers(t: f64) -> PyResult<()> {
-    let start = SystemTime::now();
-    let microsleep_dur = Duration::from_nanos(500);
-    let sleep_dur = Duration::from_secs_f64(t);
-    if (microsleep_dur * 200) < sleep_dur {
-        thread::sleep(sleep_dur - microsleep_dur * 200)
+    if t <= 0.0 {
+        return Ok(());
     }
+    let start = Instant::now();
+    let sleep_dur = Duration::from_secs_f64(t);
+    let spin_threshold = Duration::from_micros(200);
+
     loop {
-        thread::sleep(microsleep_dur);
-        match SystemTime::now().duration_since(start) {
-            Ok(t) => {
-                if t >= sleep_dur {
-                    return Ok(());
-                }
-            }
-            Err(_) => return Err(PyRuntimeError::new_err(CLOCK_PROBLEMS)),
+        let elapsed = start.elapsed();
+        if elapsed >= sleep_dur {
+            return Ok(());
+        }
+        let remaining = sleep_dur - elapsed;
+        if remaining > spin_threshold {
+            // Sleep for half the remaining time — safe, never overshoots target
+            thread::sleep(remaining / 2);
+        } else {
+            // Pure spin-wait for the final <200μs
+            std::hint::spin_loop();
         }
     }
 }
