@@ -109,7 +109,10 @@ class Clock(MonotonicClock):
         Parameters
         ----------
         newT : float
-            Currently unused. Reserved for PsychoPy API compatibility.
+            Additional time to offset by when resetting. Values greater than zero
+            add to the baseline used for comparison, making e.g. an immediate call to
+            :meth:`getTime` return a value close to ``-newT``. It's weird but matches
+            the behavior of Psychopy. Default is 0.0.
 
         Raises
         ------
@@ -126,28 +129,27 @@ class Clock(MonotonicClock):
         """
 
     def addTime(self, t: float) -> None:
-        """Shift the clock's baseline forward by ``t`` seconds.
-
-        Adding time to the baseline makes future :meth:`getTime` calls return a smaller
-        value, effectively subtracting ``t`` from the elapsed time.
+        """Shift the clock's returned time forward by ``t`` seconds.
 
         Parameters
         ----------
         t : float
-            The amount of time to add to the baseline, in seconds.
+            The amount of time to shift forward, in seconds.
 
         Examples
         --------
         >>> import psyquartz
         >>> clock = psyquartz.Clock()
         >>> clock.addTime(1.0)
-        >>> clock.getTime()  # close to -1.0
+        >>> clock.getTime()  # close to 1.0
         """
 
     def add(self, t: float) -> None:
         """Shift the clock's baseline forward by ``t`` seconds.
 
-        Alias for :meth:`addTime`.
+        For compatibility with the deprecated PsychoPy method of the same name. Opposite
+        behavior to :meth:`addTime` - shifts the baseline forward, making the clock
+        return a smaller value.
 
         Parameters
         ----------
