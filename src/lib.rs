@@ -1,9 +1,13 @@
+#![allow(non_snake_case)]
+// We're matching the Psychopy API so unfortunately we have stupid snake case names.
+// Sorry clippy.
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
 #[pyclass(subclass)]
 pub struct MonotonicClock {
+    t0: Instant,
     pub _timeAtLastReset: f64,
     pub _epochTimeAtLastReset: f64,
 }
@@ -14,29 +18,27 @@ const CLOCK_PROBLEMS: &str = "Uh oh. The system clock took a shit.";
 impl MonotonicClock {
     #[new]
     pub fn new() -> PyResult<MonotonicClock> {
-        let t0 = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
-        match t0 {
-            Ok(t) => Ok(MonotonicClock {
-                _timeAtLastReset: t.as_secs_f64(),
+        let t0 = Instant::now();
+        let _epochTimeAtLastReset = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
+        if let Ok(t) = _epochTimeAtLastReset {
+            Ok(MonotonicClock {
+                t0,
+                _timeAtLastReset: 0.0f64,
                 _epochTimeAtLastReset: t.as_secs_f64(),
-            }),
-            Err(_) => Err(PyRuntimeError::new_err(CLOCK_PROBLEMS)),
+            })
+        } else {
+            Err(PyRuntimeError::new_err(CLOCK_PROBLEMS))
         }
     }
 
     #[pyo3(signature = (applyZero=true))]
     pub fn getTime(&self, applyZero: bool) -> PyResult<f64> {
-        let t = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
-        match t {
-            Ok(t) => {
-                if applyZero {
-                    let t = t.as_secs_f64();
-                    return Ok(t - &self._timeAtLastReset);
-                } else {
-                    return Ok(t.as_secs_f64());
-                }
-            }
-            Err(_) => return Err(PyRuntimeError::new_err(CLOCK_PROBLEMS)),
+        let t = self.t0.elapsed();
+        if applyZero {
+            let t = t.as_secs_f64();
+            return Ok(t - &self._timeAtLastReset);
+        } else {
+            return Ok(t.as_secs_f64());
         }
     }
 
@@ -61,12 +63,12 @@ impl Clock {
     }
     #[pyo3(signature = (newT=0f64))]
     pub fn reset(mut self_: PyRefMut<'_, Self>, newT: f64) -> PyResult<()> {
-        self_.as_super()._timeAtLastReset = 0.0 + newT;
+        self_.as_super()._timeAtLastReset = self_.as_super().t0.elapsed().as_secs_f64() + newT;
         let t = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH);
         match t {
             Ok(t) => {
                 self_.as_super()._epochTimeAtLastReset = t.as_secs_f64();
-                Ok(self_.as_super()._timeAtLastReset = t.as_secs_f64())
+                Ok(())
             }
             Err(_) => Err(PyRuntimeError::new_err(CLOCK_PROBLEMS)),
         }
@@ -115,6 +117,7 @@ pub fn sleep(t: f64) -> PyResult<()> {
 
 /// A Python module implemented in Rust.
 #[pymodule(gil_used = false)]
+#[allow(unused)]
 fn psyquartz(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(sleepers, m)?);
     m.add_function(wrap_pyfunction!(sleep, m)?);
