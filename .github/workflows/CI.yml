@@ -77,7 +77,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: uv tool install maturin
       - run: uv sync
-      - run: uv pytest tests/
+      - run: uv run pytest tests/
 
 
   linux:
