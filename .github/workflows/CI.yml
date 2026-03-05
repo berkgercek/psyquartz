@@ -65,8 +65,23 @@ jobs:
             echo "is-test-release=false" >> "$GITHUB_OUTPUT"
           fi
 
-  linux:
+  pytest:
     needs: [check-version]
+    strategy:
+      matrix:
+        runner: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: uv tool install maturin
+      - run: uv sync
+      - run: uv pytest tests/
+
+
+  linux:
+    needs: [check-version, pytest]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -105,7 +120,7 @@ jobs:
           path: dist
 
   musllinux:
-    needs: [check-version]
+    needs: [check-version, pytest]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -137,7 +152,7 @@ jobs:
           path: dist
 
   windows:
-    needs: [check-version]
+    needs: [check-version, pytest]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -165,7 +180,7 @@ jobs:
           path: dist
 
   windows-no-GIL:
-    needs: [check-version]
+    needs: [check-version, pytest]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -194,7 +209,7 @@ jobs:
           path: dist
 
   macos:
-    needs: [check-version]
+    needs: [check-version, pytest]
     runs-on: ${{ matrix.platform.runner }}
     strategy:
       matrix:
@@ -226,7 +241,7 @@ jobs:
           path: dist
 
   sdist:
-    needs: [check-version]
+    needs: [check-version, pytest]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -248,7 +263,7 @@ jobs:
     permissions:
       id-token: write
     if: needs.check-version.outputs.is-semver-tag == 'true'
-    needs: [check-version, linux, musllinux, windows, windows-no-GIL, macos, sdist]
+    needs: [check-version, pytest, linux, musllinux, windows, windows-no-GIL, macos, sdist]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -267,7 +282,7 @@ jobs:
       contents: read
       id-token: write
     if: needs.check-version.outputs.is-test-release == 'true'
-    needs: [check-version, linux, musllinux, windows, windows-no-GIL, macos, sdist]
+    needs: [check-version, pytest, linux, musllinux, windows, windows-no-GIL, macos, sdist]
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
