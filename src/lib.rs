@@ -8,7 +8,9 @@ use std::time::{Duration, Instant, SystemTime};
 #[pyclass(subclass)]
 pub struct MonotonicClock {
     t0: Instant,
+    #[pyo3(get)]
     pub _timeAtLastReset: f64,
+    #[pyo3(get)]
     pub _epochTimeAtLastReset: f64,
 }
 
@@ -75,8 +77,8 @@ impl Clock {
     }
 
     pub fn addTime(mut self_: PyRefMut<'_, Self>, t: f64) {
-        self_.as_super()._timeAtLastReset += t;
-        self_.as_super()._epochTimeAtLastReset += t;
+        self_.as_super()._timeAtLastReset -= t;
+        self_.as_super()._epochTimeAtLastReset -= t;
     }
 
     pub fn add(mut self_: PyRefMut<'_, Self>, t: f64) {
