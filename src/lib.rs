@@ -87,10 +87,9 @@ impl Clock {
     }
 }
 
-#[pyfunction]
-pub fn sleepers(t: f64) -> PyResult<()> {
+fn accurate_sleep(t: f64) -> () {
     if t <= 0.0 {
-        return Ok(());
+        return;
     }
     let start = Instant::now();
     let sleep_dur = Duration::from_secs_f64(t);
@@ -99,7 +98,7 @@ pub fn sleepers(t: f64) -> PyResult<()> {
     loop {
         let elapsed = start.elapsed();
         if elapsed >= sleep_dur {
-            return Ok(());
+            return;
         }
         let remaining = sleep_dur - elapsed;
         if remaining > spin_threshold {
@@ -113,8 +112,15 @@ pub fn sleepers(t: f64) -> PyResult<()> {
 }
 
 #[pyfunction]
-pub fn sleep(t: f64) -> PyResult<()> {
-    sleepers(t)
+pub fn sleepers(py: Python<'_>, t: f64) -> PyResult<()> {
+    py.detach(|| accurate_sleep(t));
+    Ok(())
+}
+
+#[pyfunction]
+pub fn sleep(py: Python<'_>, t: f64) -> PyResult<()> {
+    py.detach(|| accurate_sleep(t));
+    Ok(())
 }
 
 /// A Python module implemented in Rust.
